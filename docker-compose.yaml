@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  signaling-server:
+    container_name: signaling-server
+    image: signaling-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8181:8181"
+    restart: unless-stopped
