@@ -1,106 +1,105 @@
 ﻿using Fleck;
 using System.Text.Json;
+using System.Collections.Concurrent;
 
-var server = new WebSocketServer("ws://0.0.0.0:8181");
-var sockets = new Dictionary<Guid, IWebSocketConnection>();
-
-var broadcast = () =>
+namespace WebRTCServer
 {
-    var response = new
+    public class SocketInfo
     {
-        type = "connections",
-        connectedIds = sockets.Keys.Select(k => k.ToString()).ToArray(),
-        count = sockets.Count
-    };
-    
-    var json = JsonSerializer.Serialize(response);
-    foreach (var s in sockets.Values)
-        s.Send(json);
-};
+        public required IWebSocketConnection Connection { get; set; }
+        public string Offer { get; set; } = "";
+        public string Answer { get; set; } = "";
+        public string TargetSocketGuid { get; set; } = "";
+    }
 
-server.Start(socket =>
-{
-    Guid id = Guid.NewGuid();
-
-    socket.OnMessage = msg =>
+    public class Program
     {
-        try
+        static void Main()
         {
-            var root = JsonDocument.Parse(msg).RootElement;
-            
-            if (root.TryGetProperty("type", out var typeProperty))
+            var sockets = new ConcurrentDictionary<Guid, SocketInfo>();
+
+            void Pong()
             {
-                var messageType = typeProperty.GetString();
-                
-                switch (messageType)
+                var pong = new
                 {
-                    case "ping":
-                        var pongResponse = new
-                        {
-                            type = "pong",
-                            timestamp = DateTime.UtcNow.ToString("o")
-                        };
-                        socket.Send(JsonSerializer.Serialize(pongResponse));
-                        break;
-                        
-                    case "message":
-                        if (root.TryGetProperty("content", out var content))
-                        {
-                            var echoResponse = new
-                            {
-                                type = "echo",
-                                originalMessage = content.GetString(),
-                                socketId = id.ToString()
-                            };
-                            socket.Send(JsonSerializer.Serialize(echoResponse));
-                        }
-                        break;
-                        
-                    default:
-                        var errorResponse = new
-                        {
-                            type = "error",
-                            message = $"Unknown message type: {messageType}"
-                        };
-                        socket.Send(JsonSerializer.Serialize(errorResponse));
-                        break;
-                }
-            }
-            else
-            {
-                var errorResponse = new
-                {
-                    type = "error",
-                    message = "Message must have a 'type' property"
+                    type = "Pong"
                 };
-                socket.Send(JsonSerializer.Serialize(errorResponse));
+
+                var response = JsonSerializer.Serialize(pong);
+
             }
-        }
-        catch (JsonException ex)
-        {
-            var errorResponse = new
+            void BroadcastServerState()
             {
-                type = "error",
-                message = $"Invalid JSON: {ex.Message}"
-            };
-            socket.Send(JsonSerializer.Serialize(errorResponse));
+                var state = new
+                {
+                    sockets = sockets.Select(kv => new
+                    {
+                        socketGuid = kv.Key.ToString(),
+                        offer = kv.Value.Offer,
+                        answer = kv.Value.Answer,
+                        targetSocketGuid = kv.Value.TargetSocketGuid
+                    }).ToArray()
+                };
+
+                var json = JsonSerializer.Serialize(state);
+                foreach (var s in sockets.Values)
+                    s.Connection.Send(json);
+            }
+
+            var server = new WebSocketServer("ws://0.0.0.0:8181");
+            server.Start(socket =>
+            {
+                Guid id = Guid.NewGuid();
+
+                socket.OnOpen = () =>
+                {
+                    sockets[id] = new SocketInfo { Connection = socket };
+                    Console.WriteLine($"Socket {id} connected");
+                    BroadcastServerState();
+                };
+
+                socket.OnClose = () =>
+                {
+                    sockets.TryRemove(id, out _);
+                    Console.WriteLine($"Socket {id} disconnected");
+                    BroadcastServerState();
+                };
+
+                socket.OnMessage = msg =>
+                {
+                    try
+                    {
+                        var root = JsonDocument.Parse(msg).RootElement;
+
+                        if (root.TryGetProperty("type", out var ping) && ping.ToString() == "ping")
+                        {
+                            socket.Send(JsonSerializer.Serialize(new { type = "pong" }));
+                            return;
+                        }
+
+                        if (sockets.TryGetValue(id, out var socketInfo))
+                        {
+                            if (root.TryGetProperty("offer", out var offerProp))
+                                socketInfo.Offer = offerProp.GetString() ?? "";
+
+                            if (root.TryGetProperty("answer", out var answerProp))
+                                socketInfo.Answer = answerProp.GetString() ?? "";
+
+                            if (root.TryGetProperty("targetSocketGuid", out var targetProp))
+                                socketInfo.TargetSocketGuid = targetProp.GetString() ?? "";
+
+                            BroadcastServerState();
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        // ignore invalid JSON
+                    }
+                };
+            });
+
+            Console.WriteLine("WebSocket server started on ws://0.0.0.0:8181");
+            new System.Threading.ManualResetEvent(false).WaitOne();
         }
-    };
-
-    socket.OnOpen = () =>
-    {
-        sockets[id] = socket;
-        Console.WriteLine($"Socket {id} connected");
-        broadcast();
-    };
-
-    socket.OnClose = () =>
-    {
-        sockets.Remove(id);
-        Console.WriteLine($"Socket {id} disconnected");
-        broadcast();
-    };
-});
-
-Console.WriteLine("WebSocket server started on ws://0.0.0.0:8181");
-new ManualResetEvent(false).WaitOne();
+    }
+}
