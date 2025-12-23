@@ -30,4 +30,5 @@ packages/
 *.mdf
 *.ldf
 *AssemblyInfo*
-obj/
+/obj/
+/bin/
