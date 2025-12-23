@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: signaling-server
+  name: signaling-server-deployment
   labels:
     app: signaling-server
 spec:
@@ -16,10 +16,10 @@ spec:
     spec:
       containers:
       - name: signaling-server
-        image: signaling-server:latest
+        image: ghcr.io/leutrimd1/signaling-server:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8181
+        - containerPort: 80
           name: http
         resources:
           requests:
@@ -39,6 +39,6 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8181
+    targetPort: 80
     name: websocket
   type: ClusterIP
