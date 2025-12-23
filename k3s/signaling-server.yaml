@@ -17,7 +17,7 @@ spec:
       containers:
       - name: signaling-server
         image: ghcr.io/leutrimd1/signaling-server:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http
