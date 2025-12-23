@@ -71,7 +71,7 @@ namespace WebRTCServer
             // ---------------------------------------------
             // WebSocket server
             // ---------------------------------------------
-            var server = new WebSocketServer("ws://0.0.0.0:8181");
+            var server = new WebSocketServer("ws://0.0.0.0:80");
 
             server.Start(socket =>
             {
@@ -150,7 +150,7 @@ namespace WebRTCServer
                 };
             });
 
-            Console.WriteLine("WebSocket server running at ws://0.0.0.0:8181");
+            Console.WriteLine("WebSocket server running at ws://0.0.0.0:80");
             new System.Threading.ManualResetEvent(false).WaitOne();
         }
     }
