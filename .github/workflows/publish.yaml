@@ -21,7 +21,7 @@ jobs:
 
       - name: Build and push docker image
         run: | 
-          docker build -t --no-cache ghcr.io/${{ github.repository }}:latest .
+          docker build --no-cache -t ghcr.io/${{ github.repository }}:latest .
           docker push ghcr.io/${{ github.repository }}:latest
 
       - name: Push to k3s
